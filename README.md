@@ -173,7 +173,7 @@ The full regression summary reports coefficient estimates, standard errors, t-st
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/gdp-prediction.git
+git clone https://github.com/Silver-balls111/gdp-prediction.git
 cd gdp-prediction
 pip install -r requirements.txt
 ```
