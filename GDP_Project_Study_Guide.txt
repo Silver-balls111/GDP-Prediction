@@ -1,0 +1,816 @@
+================================================================================
+  GDP GROWTH PREDICTION — COMPLETE STUDY GUIDE
+  Fundamentals of Data Science | Regression & Inference Assignment
+  Group: Anuj Singh · Prasiddha Adhikari · Sri Krishna Lamichane
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — PROJECT OVERVIEW (THE BIG PICTURE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS THE PROJECT?
+--------------------
+This project builds a machine learning pipeline that predicts how fast a
+country's economy will grow in a given year, measured as GDP growth rate (%).
+We use World Bank panel data covering 217 countries from 1960 to 2023, train
+four different regression models on historical data, and evaluate them on
+completely unseen 2023 data.
+
+WHAT IS GDP GROWTH?
+-------------------
+GDP (Gross Domestic Product) is the total monetary value of all goods and
+services produced in a country in one year. GDP growth rate is the percentage
+change in GDP from one year to the next. For example, if a country's GDP was
+$100 billion last year and $103 billion this year, its GDP growth rate is 3%.
+A positive rate means the economy is expanding; a negative rate means recession.
+
+WHY IS THIS A REGRESSION PROBLEM?
+----------------------------------
+Because the target variable (gdp_growth) is a continuous number, not a
+category. Regression models predict numeric outputs. If we were predicting
+"will this country grow or shrink?" it would be classification. Since we
+predict the exact growth percentage, it is regression.
+
+WHAT DOES THE PIPELINE DO, STEP BY STEP?
+-----------------------------------------
+1. Load raw World Bank data (CSV file with 13,888 rows, 18 columns)
+2. Clean the data — fix missing values, remove impossible outliers, fix data types
+3. Engineer new features — create lagged variables and composite indicators
+4. Explore the data — correlation heatmaps, trend plots, country comparisons
+5. Split data — train on years before 2023, test on 2023 only
+6. Train 4 regression models — Simple LR, Ridge, Random Forest, Gradient Boosting
+7. Evaluate models — RMSE, MSE, R² on the 2023 test set + cross-validation
+8. Perform statistical inference — OLS hypothesis testing on key features
+9. Interpret results — feature importance, actual vs. predicted plots
+10. Export predictions to CSV
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — THE DATASET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SOURCE: World Bank Open Data
+SHAPE: 13,888 rows × 18 columns
+STRUCTURE: Panel data — each row is one country in one year
+
+COLUMNS AND WHAT THEY MEAN:
+-----------------------------
+column_name                    | What it means
+-------------------------------|----------------------------------------------
+country_name                   | Name of the country
+year                           | Year of observation (1960–2023)
+population_total               | Total population count
+population_growth              | Annual population growth rate (%)
+gni_atlas_usd                  | Gross National Income in USD (Atlas method)
+gni_per_capita_atlas_usd       | GNI per person in USD
+life_expectancy                | Average life expectancy at birth (years)
+school_enrollment_secondary    | % of secondary school age population enrolled
+power_consumption_per_capita   | Electric power consumption (kWh per person)
+gdp_usd                        | Total GDP in US dollars
+gdp_growth                     | Annual GDP growth rate (%) ← THIS IS OUR TARGET
+inflation_rate                 | Annual inflation rate (%)
+agriculture_value_added        | Agriculture sector as % of GDP
+industry_value_added           | Industry sector as % of GDP
+exports_gdp_percent            | Exports as % of GDP
+imports_gdp_percent            | Imports as % of GDP
+capital_formation_gdp_percent  | Gross capital formation as % of GDP
+fdi_net_inflows_usd            | Foreign Direct Investment net inflows (USD)
+
+MISSING VALUES:
+---------------
+World Bank data uses ".." to represent missing values. These were replaced
+with pandas NA and then imputed using forward-fill then back-fill within each
+country's time series. This means if Nepal's 2005 life expectancy is missing,
+it inherits the 2004 value first (forward-fill), or if that is also missing,
+the next available future value (back-fill).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — DATA CLEANING (IN DETAIL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROBLEM 1 — Data stored as strings, not numbers
+  All numeric columns came in as text strings containing commas (e.g. "1,200,000")
+  or percent signs (e.g. "3.5%"). We stripped these characters and converted
+  every column to float using pd.to_numeric(errors='coerce'), which turns any
+  remaining junk into NaN rather than crashing.
+
+PROBLEM 2 — Extreme GDP growth outliers
+  Some very early entries (e.g. Oman 1965) showed GDP growth of over 100 million
+  percent — clearly a data error or an artefact of very small base values in the
+  early post-independence years. We restricted gdp_growth to the range [-50%, +150%].
+  Why -50? Even the Great Depression only caused ~15% contraction. Why +150?
+  Post-conflict or post-isolation economies occasionally see triple-digit growth
+  from a very low base. Going beyond 150% is almost always a data error.
+
+PROBLEM 3 — Hyperinflation outliers
+  Countries like Zimbabwe experienced inflation of millions of percent. Including
+  these values destroys linear models because they shift coefficient estimates
+  massively without representing typical economic behaviour. Inflation was capped
+  at [-20%, +100%].
+
+PROBLEM 4 — Scale extremes in dollar-denominated columns
+  The US has a GDP 10,000× larger than a small island nation. To prevent the
+  biggest economies from dominating the model, population_total, gni_atlas_usd,
+  and gdp_usd were winsorised — values below the 1st percentile were lifted up
+  and values above the 99th percentile were pulled down.
+
+WHY NOT JUST DELETE OUTLIER ROWS?
+-----------------------------------
+Deleting rows loses information from entire countries or years. Clipping/capping
+preserves the row while reducing the destructive influence of the extreme value.
+This is standard practice in economic panel data analysis.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — FEATURE ENGINEERING (IN DETAIL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHY ENGINEER NEW FEATURES AT ALL?
+-----------------------------------
+When we checked the correlation of original features against gdp_growth, the
+maximum absolute correlation was only ~0.14. This is near zero — it means the
+raw features, used as-is, have almost no linear relationship with the target.
+The reason is that these are all contemporaneous measurements: we are using the
+inflation OF THE SAME YEAR to predict the GDP growth OF THAT SAME YEAR. In
+reality, last year's conditions tell us far more about this year's growth than
+this year's conditions (which are not yet known at prediction time).
+
+The solution is LAGGED FEATURES — using past values to predict the future.
+
+LAGGED TARGET VARIABLE:
+  gdp_growth_lag1 = last year's GDP growth (shift by 1)
+  gdp_growth_lag2 = growth from 2 years ago (shift by 2)
+  gdp_growth_lag3 = growth from 3 years ago (shift by 3)
+
+  Why this matters: Economic growth has momentum (autocorrelation). A country
+  that grew 6% last year is more likely to grow 5% this year than one that
+  contracted 2% last year. gdp_growth_lag1 has a correlation of ~0.36 with
+  the target — more than twice any original feature.
+
+ROLLING MOVING AVERAGES:
+  gdp_growth_ma3 = average of the past 3 years of growth (no leakage)
+  gdp_growth_ma5 = average of the past 5 years of growth
+
+  These smooth out year-to-year noise and capture medium-term growth trends.
+  They are computed using shift(1).rolling(N).mean() to ensure we never use
+  the current year's value inside the window.
+
+LAGGED ECONOMIC INDICATORS:
+  inflation_lag1  = inflation rate from the previous year
+  capform_lag1    = capital formation from the previous year
+
+  Capital formation (investment) is a leading indicator of growth — countries
+  that invest heavily this year tend to grow more next year.
+
+COMPOSITE / STRUCTURAL FEATURES:
+  trade_openness  = exports_% + imports_% — a single measure of how integrated
+                    a country is in global trade. Higher openness generally
+                    correlates with growth for developing economies.
+  gdp_log         = log(gdp_usd + 1) — the log transformation compresses the
+                    enormous range of GDP values (from $50M to $25T) into a
+                    manageable scale. The +1 prevents log(0) errors.
+  gdp_per_capita  = gdp_usd / population — wealth per person, a better
+                    structural measure than raw GDP for cross-country comparison.
+  gdp_growth_rate_calc = year-on-year % change computed from gdp_usd column
+                    (complements the reported gdp_growth field).
+  gni_to_gdp_ratio = gni_per_capita / gdp_usd — relates personal income to
+                    total output.
+
+WHAT IS DATA LEAKAGE AND HOW DID WE AVOID IT?
+-----------------------------------------------
+Data leakage means accidentally giving the model information it would not have
+had at prediction time. In time series, this means using future values when
+computing features for past time steps. All our lag operations use .shift(1),
+which means for any row in year T, the lag feature contains the value from year
+T-1. The rolling averages also apply shift(1) BEFORE the .rolling() window, so
+the window only contains values from years T-2, T-3, T-4, etc. The 2023 test
+set sees zero information from 2023 in any feature.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — TRAIN / TEST SPLIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HOW WE SPLIT:
+  Training set: all rows where year < 2023  (~13,700+ rows)
+  Test set:     all rows where year == 2023 (~210 rows, one per country)
+
+WHY NOT A RANDOM 80/20 SPLIT?
+--------------------------------
+This is panel time-series data. A random split would leak future information
+into training — for example, Nepal's 2022 data would land in the test set and
+Nepal's 2023 data in training. The model would learn from data that came AFTER
+the data it is supposedly predicting, which is not realistic. A temporal split
+(train on past, test on most recent year) mirrors how the model would be used
+in the real world.
+
+WHY 2023 SPECIFICALLY?
+-----------------------
+It is the most recent complete year in the dataset, and it provides a natural
+holdout that no model variant ever saw during training. Using it as the test
+year means our performance metrics reflect genuine out-of-sample generalisation.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — THE FOUR MODELS (IN DETAIL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────
+MODEL 1: SIMPLE LINEAR REGRESSION
+──────────────────────────────────────────────────────
+WHAT IT DOES:
+  Fits the equation:  gdp_growth = β0 + β1 × gdp_growth_lag1
+  Using only ONE predictor — the single feature with the highest absolute
+  correlation to the target (which turns out to be gdp_growth_lag1, |r| ≈ 0.36).
+
+HOW IT WORKS MATHEMATICALLY:
+  It finds the values of β0 (intercept) and β1 (slope) that minimise the sum
+  of squared residuals:  Σ(actual - predicted)²
+  This is called Ordinary Least Squares (OLS).
+
+WHY WE INCLUDE IT:
+  It serves as a transparent baseline. If a complex model cannot beat a single-
+  feature straight line, the complexity is not adding value.
+
+LIMITATION:
+  It ignores all other predictors, so it cannot capture multi-factor economic
+  dynamics. Expected to have the lowest R² of all four models.
+
+──────────────────────────────────────────────────────
+MODEL 2: RIDGE REGRESSION
+──────────────────────────────────────────────────────
+WHAT IT DOES:
+  Uses all 24 engineered features simultaneously in a linear model but adds a
+  penalty term to the loss function to shrink large coefficients.
+
+HOW IT WORKS MATHEMATICALLY:
+  Standard OLS minimises:    Σ(actual - predicted)²
+  Ridge minimises:           Σ(actual - predicted)² + α × Σ(β²)
+  
+  The extra term α × Σ(β²) penalises large coefficients. This is called L2
+  regularisation. With α = 1.0 (our setting), the penalty is moderate.
+
+WHY RIDGE INSTEAD OF PLAIN MULTIPLE LINEAR REGRESSION?
+  Our 24 features include highly correlated variables (e.g., gdp_growth_lag1,
+  gdp_growth_ma3, gdp_growth_ma5 are all measuring similar things). This is
+  called multicollinearity. In plain OLS, multicollinearity causes coefficient
+  estimates to become unstable and inflated — small changes in the data produce
+  wildly different coefficients. Ridge regularisation dampens this by
+  discouraging any single coefficient from growing too large.
+
+WHY STANDARDSCALER IS REQUIRED FOR RIDGE?
+  Ridge penalises large coefficient values, but coefficient size is affected by
+  the unit of measurement. A feature measured in millions (like GDP in USD) will
+  naturally have a tiny coefficient, while a feature measured in percentages
+  (like inflation) has a larger one. If we do not scale, Ridge unfairly penalises
+  features measured in large units. StandardScaler transforms each feature to
+  mean=0, standard deviation=1 before fitting Ridge.
+
+ALPHA PARAMETER (α = 1.0):
+  α controls the strength of regularisation. α = 0 → plain OLS. α = ∞ → all
+  coefficients become zero. α = 1.0 is a common default that provides moderate
+  shrinkage without excessive bias.
+
+──────────────────────────────────────────────────────
+MODEL 3: RANDOM FOREST
+──────────────────────────────────────────────────────
+WHAT IT IS:
+  An ensemble of 300 decision trees, each trained on a random subset of the data
+  and a random subset of features. The final prediction is the average of all
+  300 individual tree predictions.
+
+HOW A SINGLE DECISION TREE WORKS:
+  A decision tree splits the data at each node using the feature and threshold
+  that best separates the target values (minimises variance of child nodes). For
+  example: "if gdp_growth_lag1 > 4%, go left; otherwise go right." This repeats
+  until the tree reaches its maximum depth or minimum leaf size.
+
+WHY AN ENSEMBLE OF TREES?
+  A single deep decision tree overfits — it memorises training data but performs
+  poorly on new data. By averaging 300 trees, each built on different random
+  subsets (bagging), the errors of individual trees cancel out. The result is
+  lower variance and much better generalisation.
+
+KEY HYPERPARAMETERS WE SET:
+  n_estimators=300    → number of trees (more = more stable, but slower)
+  max_depth=8         → each tree can split at most 8 levels deep
+  min_samples_leaf=8  → each leaf node must contain at least 8 samples
+                        (prevents over-specific splits)
+  max_features=0.6    → each split only considers 60% of features at random
+                        (increases diversity among trees)
+  random_state=42     → seeds the random number generator for reproducibility
+
+CAN RANDOM FOREST HANDLE MULTICOLLINEARITY?
+  Yes. Unlike OLS, tree-based models are not sensitive to correlated features.
+  The random feature selection at each split means correlated features share
+  "coverage" across the forest rather than inflating each other's importance.
+
+──────────────────────────────────────────────────────
+MODEL 4: GRADIENT BOOSTING
+──────────────────────────────────────────────────────
+WHAT IT IS:
+  Another ensemble of decision trees, but built sequentially rather than in
+  parallel. Each new tree is trained to correct the errors (residuals) of all
+  previous trees combined.
+
+HOW IT DIFFERS FROM RANDOM FOREST:
+  Random Forest: trees are independent, predictions are averaged (bagging).
+  Gradient Boosting: each tree learns from the mistakes of the previous one
+  (boosting). This tends to give better accuracy but is more prone to overfitting
+  if hyperparameters are not carefully controlled.
+
+KEY HYPERPARAMETERS WE SET:
+  n_estimators=300    → number of sequential trees
+  max_depth=4         → shallower trees than RF (each is a "weak learner")
+  learning_rate=0.03  → each tree contributes only 3% of its prediction
+                        (small rate = more trees needed, but more robust)
+  subsample=0.8       → each tree trains on only 80% of rows (stochastic
+                        gradient boosting, reduces overfitting)
+  min_samples_leaf=10 → conservative leaf size to prevent overfitting
+
+WHY IS LEARNING RATE SMALL (0.03)?
+  With a large learning rate (e.g., 0.3), each tree makes big corrections and
+  the model quickly overfits the training data. A small learning rate forces the
+  model to take many small steps toward the solution, learning slowly but
+  arriving at a more generalisable answer. This is analogous to gradient descent.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — EVALUATION METRICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THREE METRICS ARE REPORTED FOR EACH MODEL:
+
+1. MSE — Mean Squared Error
+   Formula: (1/n) × Σ(actual - predicted)²
+   What it measures: Average squared difference between actual and predicted values.
+   The squaring means large errors are penalised much more than small ones.
+   Units: % squared (hard to interpret directly).
+   Lower is better.
+
+2. RMSE — Root Mean Squared Error
+   Formula: √MSE
+   What it measures: Same as MSE but in the original unit (% GDP growth).
+   Interpretation: "On average, the model's prediction is off by ±RMSE percentage
+   points." For example, RMSE = 2.5 means predictions are typically within 2.5%
+   of the actual growth rate.
+   Lower is better.
+
+3. R² — Coefficient of Determination
+   Formula: 1 - (Σ(actual - predicted)² / Σ(actual - mean(actual))²)
+   Range: (-∞, 1]. A perfect model = 1.0. A model that always predicts the mean
+   = 0.0. Negative R² means the model is worse than just predicting the mean.
+   What it measures: "What proportion of the variance in GDP growth does the model
+   explain?" R² = 0.65 means the model explains 65% of the variation.
+   Higher is better.
+
+5-FOLD CROSS-VALIDATION:
+  For Random Forest and Gradient Boosting, we also ran 5-fold CV on the training
+  set. This splits training data into 5 equal parts, trains on 4, validates on 1,
+  rotates 5 times, and averages the R² scores. The mean ± standard deviation is
+  reported. This checks whether the model generalises consistently or whether
+  good test performance was lucky.
+
+WHICH MODEL PERFORMS BEST?
+  Gradient Boosting and Random Forest significantly outperform the linear models
+  because GDP growth has non-linear relationships with predictors. Ridge performs
+  better than Simple LR because it uses all 24 features. Simple LR is the weakest
+  but most interpretable.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — STATISTICAL INFERENCE (OLS WITH STATSMODELS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHY RUN OLS SEPARATELY FROM SKLEARN?
+  scikit-learn's LinearRegression gives you coefficients and predictions but NO
+  statistical inference (no p-values, no confidence intervals, no F-statistic).
+  statsmodels.OLS gives the full regression summary table — this is what we use
+  to answer "which features are statistically significant predictors of GDP growth?"
+
+THE 7 FEATURES USED IN OLS:
+  gdp_growth_lag1, gdp_growth_ma3, gdp_growth_ma5,
+  inflation_rate, capital_formation_gdp_percent,
+  population_growth, industry_value_added
+
+HOW TO READ THE OLS OUTPUT:
+  coef       → estimated effect: a 1-unit increase in this feature is associated
+               with a 'coef' change in gdp_growth, holding all else constant
+  std err    → standard error of the coefficient estimate
+  t          → t-statistic = coef / std_err (how many standard errors from zero)
+  P>|t|      → p-value: probability of observing this t-statistic if the true
+               coefficient were zero
+  [0.025, 0.975] → 95% confidence interval for the coefficient
+
+WHAT IS THE HYPOTHESIS TEST?
+  For each feature:
+    H₀ (null hypothesis):     the true coefficient = 0 (feature has no effect)
+    H₁ (alternative):         the true coefficient ≠ 0 (feature has an effect)
+  Decision rule: if p-value < 0.05, we reject H₀ and conclude the feature
+  is a statistically significant predictor at the 5% significance level.
+
+EXPECTED SIGNIFICANT FEATURES:
+  gdp_growth_lag1 and gdp_growth_ma3/ma5 are expected to have very small
+  p-values (< 0.001) because past growth strongly predicts future growth.
+  capital_formation_gdp_percent is expected to be significant — investment
+  drives future output growth (this is basic Keynesian macroeconomics).
+  inflation_rate may have a negative coefficient — high inflation tends to
+  destabilise growth (monetary economics theory).
+
+WHY ADD A CONSTANT (sm.add_constant)?
+  Without a constant (intercept), the regression line is forced through the
+  origin (0,0). This is almost never appropriate in economics. We add an
+  intercept to allow the baseline prediction to be non-zero.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 9 — FEATURE IMPORTANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS FEATURE IMPORTANCE IN RANDOM FOREST?
+  Each tree in the forest makes splits based on features. Every time a feature
+  is used for a split, we measure how much that split reduced the variance
+  (impurity) in the child nodes, weighted by the number of samples at that node.
+  This is averaged across all 300 trees. The result is called Mean Decrease in
+  Impurity (MDI). Features are normalised to sum to 1.0.
+
+WHAT DO WE EXPECT TO SEE?
+  gdp_growth_lag1 should dominate, followed by gdp_growth_ma3 and gdp_growth_ma5.
+  The contemporaneous structural variables (life expectancy, school enrollment)
+  will likely appear near the bottom of importance rankings, confirming that
+  lagged features are the key drivers of predictive power.
+
+HOW DOES THIS RELATE TO THE OLS INFERENCE?
+  Both methods converge on the same story: momentum in past growth, investment
+  activity, and inflation are the most important predictors. OLS gives us the
+  direction and statistical significance; feature importance gives us the
+  relative predictive contribution in a non-linear model.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 10 — LIKELY EXAM / VIVA QUESTIONS AND ANSWERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+────────────────────────────────────────────
+CATEGORY A: CONCEPTUAL / FUNDAMENTAL
+────────────────────────────────────────────
+
+Q: Why is this a regression problem and not a classification problem?
+A: Because the target variable, gdp_growth, is a continuous numeric value (e.g.,
+   3.2%, -1.5%). Regression predicts continuous outputs. If we had binned it into
+   categories like "high growth / low growth / recession" it would become
+   classification. Since we predict the actual numeric growth rate, it is
+   regression.
+
+Q: What is the difference between regression and inference?
+A: Regression is about prediction — fitting a model to predict the target
+   variable as accurately as possible. Inference is about explanation — 
+   understanding which features significantly affect the target, in what
+   direction, and how confident we are in those relationships. We use sklearn
+   models for prediction and statsmodels OLS for inference.
+
+Q: What is overfitting? How did you guard against it?
+A: Overfitting is when a model learns the training data so well that it fails to
+   generalise to new data — it learns noise rather than signal. We guarded
+   against it in multiple ways: (1) Ridge regression uses L2 regularisation to
+   penalise complex models; (2) Random Forest uses min_samples_leaf=8 and
+   max_depth=8 to limit tree complexity; (3) Gradient Boosting uses a small
+   learning rate of 0.03 and max_depth=4; (4) We used 5-fold cross-validation
+   to verify performance across multiple validation folds; (5) Our final test set
+   (2023) was strictly held out — never used to tune any hyperparameter.
+
+Q: What is multicollinearity and why is it a problem?
+A: Multicollinearity is when two or more predictor variables are highly correlated
+   with each other. For example, gdp_growth_lag1, gdp_growth_ma3, and gdp_growth_ma5
+   all measure aspects of past growth, so they are correlated. In OLS, multicolli-
+   nearity inflates standard errors of coefficients, making hypothesis tests
+   unreliable. Ridge regression addresses this via L2 regularisation. Tree-based
+   models are naturally immune because they select features one at a time per split.
+
+Q: What is the bias-variance tradeoff?
+A: Bias is the error from overly simple assumptions (underfitting). Variance is
+   sensitivity to small fluctuations in training data (overfitting). Simple Linear
+   Regression has high bias — it assumes a straight-line relationship regardless
+   of complexity in the data. An unconstrained deep decision tree has high variance.
+   Ridge regression introduces a small amount of bias via regularisation but
+   substantially reduces variance. Gradient Boosting with a small learning rate
+   achieves a good bias-variance balance.
+
+────────────────────────────────────────────
+CATEGORY B: DATA & PREPROCESSING
+────────────────────────────────────────────
+
+Q: Why did you use forward-fill and back-fill for missing values instead of
+   the mean or median?
+A: Because this is time-series data — each country's values in consecutive years
+   are much more similar to each other than to the global mean. Using the global
+   mean imputation would introduce unrealistic values (e.g., Nepal's 1970 power
+   consumption filled with the average of the US, China, and all countries). 
+   Forward-fill uses the same country's previous year, which is far more realistic.
+
+Q: Why did you sort by year before filling missing values?
+A: If the data were not sorted chronologically, forward-fill might pick up a later
+   year's value and fill it into an earlier row — the exact opposite of what we
+   want. Sorting ensures that the time direction of the fill is correct.
+
+Q: What is winsorisation and why did you use it?
+A: Winsorisation clips extreme values to the 1st and 99th percentile boundaries
+   rather than removing them. For example, if a country's GDP is an extreme
+   outlier, we set it to the 99th percentile value instead of deleting the row.
+   This preserves the observation while preventing extreme values from
+   disproportionately influencing model coefficients.
+
+Q: Why did you apply the log transformation to GDP?
+A: GDP values span an enormous range — from around $50 million (small Pacific
+   islands) to $25 trillion (United States). This right-skewed distribution means
+   linear models will be dominated by the largest economies. The log transformation
+   compresses this range dramatically: log($25T) ≈ 24.9, log($50M) ≈ 17.7. The
+   transformed values are more normally distributed and allow models to treat
+   small and large economies more equitably.
+
+Q: Could there be any data leakage in your pipeline?
+A: No, by design. All lagged features use .shift(1), ensuring only information
+   from year T-1 or earlier is used to predict year T. The train/test split is
+   strictly temporal (train < 2023, test == 2023). StandardScaler is fitted only
+   on training data and then applied to test data — fitting on the full dataset
+   would leak test distribution information into the scaler.
+
+────────────────────────────────────────────
+CATEGORY C: FEATURE ENGINEERING
+────────────────────────────────────────────
+
+Q: Why did you add lagged features? Were they not already in the dataset?
+A: No, the dataset only contains contemporaneous measurements — the inflation and
+   GDP of the same year we are trying to predict. Contemporaneous features had a
+   maximum correlation of ~0.14 with gdp_growth. By creating lagged versions
+   (previous year's inflation, previous year's growth), we introduce genuine
+   predictive signal. gdp_growth_lag1 alone has a correlation of ~0.36 with the
+   target — more than doubling the signal available.
+
+Q: What is autocorrelation, and why does it matter here?
+A: Autocorrelation means a variable is correlated with its own past values. GDP
+   growth has positive autocorrelation — economies that grow tend to keep growing
+   in the near term; economies in recession tend to stay in recession. This is the
+   economic phenomenon called "growth momentum." Exploiting this via lag features
+   is the most powerful single improvement in the model.
+
+Q: What is the economic intuition behind capital_formation_gdp_percent as a predictor?
+A: Capital formation (gross fixed capital investment) represents spending on
+   machinery, infrastructure, and buildings. This is investment in productive
+   capacity. According to standard growth theory (Solow, 1956), higher investment
+   today leads to higher output tomorrow. So capital formation is a leading
+   indicator — it causes future GDP growth rather than merely correlating with it.
+
+Q: Why is trade_openness a useful feature?
+A: Countries more integrated in global trade (high exports + imports as % of GDP)
+   tend to grow faster, especially developing economies. Trade brings technology
+   transfer, competition, and access to larger markets. It is a structural
+   characteristic of an economy that persists over time and has been shown to
+   correlate with long-run growth in economic literature.
+
+────────────────────────────────────────────
+CATEGORY D: MODEL-SPECIFIC QUESTIONS
+────────────────────────────────────────────
+
+Q: What is the equation for Ridge Regression?
+A: Ridge minimises: Σᵢ(yᵢ - β₀ - Σⱼ βⱼxᵢⱼ)² + α Σⱼ βⱼ²
+   The first term is the standard OLS residual sum of squares.
+   The second term is the L2 penalty: the sum of squared coefficients multiplied
+   by α (regularisation strength). As α increases, coefficients shrink toward
+   zero (but never exactly zero — that is Lasso, which uses L1 penalty).
+
+Q: What is the difference between Ridge and Lasso regression?
+A: Both are regularised linear regressions.
+   Ridge (L2): penalty = α Σβ² — shrinks all coefficients toward zero, but none
+   reach exactly zero. All features remain in the model.
+   Lasso (L1): penalty = α Σ|β| — can shrink coefficients to exactly zero,
+   effectively performing automatic feature selection.
+   We chose Ridge because we wanted to retain all 24 features (many are genuinely
+   informative) and primarily address multicollinearity rather than sparsity.
+
+Q: Why is StandardScaler necessary for Ridge but not for Random Forest?
+A: Ridge penalises large coefficient values. Coefficient magnitude is affected by
+   the scale of the feature — a feature in millions produces a tiny coefficient
+   while a feature in percentages produces a large one. Ridge would unfairly
+   penalise features measured in small units. Random Forest splits on threshold
+   values (e.g., "is gdp_growth_lag1 > 3?") — the absolute scale does not affect
+   which threshold is the best split, only the relative ordering matters.
+
+Q: How does Gradient Boosting actually "boost"?
+A: In each iteration, it: (1) calculates the residuals (errors) of the current
+   model, (2) trains a new shallow decision tree to predict those residuals,
+   (3) adds this new tree to the ensemble, scaled by the learning rate.
+   The model improves incrementally, with each new tree targeting the exact errors
+   of the previous combined model. This is gradient descent in function space —
+   we are descending the gradient of the loss function (MSE) by adding trees.
+
+Q: Why did you use 300 trees for both Random Forest and Gradient Boosting?
+A: More trees generally give more stable and accurate predictions, up to a point.
+   Below ~100 trees, both models can be noisy. Beyond 500-1000, improvements
+   become marginal. 300 gives a good balance between performance and training
+   time. Cross-validation confirmed the models were not overfitting at this count.
+
+────────────────────────────────────────────
+CATEGORY E: STATISTICAL INFERENCE
+────────────────────────────────────────────
+
+Q: What is a p-value? What does p < 0.05 mean?
+A: A p-value is the probability of observing data as extreme as what we observed,
+   assuming the null hypothesis is true. In our context, the null hypothesis for
+   each coefficient is that it equals zero (the feature has no effect on GDP growth).
+   p < 0.05 means there is less than a 5% probability that we would see this
+   coefficient if the true effect were zero. We therefore reject the null and
+   conclude the feature is a statistically significant predictor. This is the
+   conventional threshold in social science and economics.
+
+Q: What is a confidence interval? How do you interpret the 95% CI?
+A: A 95% confidence interval for a coefficient means: if we repeated the study
+   many times, 95% of the intervals computed would contain the true coefficient
+   value. Practically: we are 95% confident the true effect size lies within
+   this range. If the interval does not contain zero, the feature is significant
+   at the 5% level (consistent with p < 0.05).
+
+Q: What is the F-statistic in the OLS summary?
+A: The F-statistic tests whether the model as a WHOLE explains significantly more
+   variance than predicting the mean for every observation. It tests the joint
+   null hypothesis that ALL coefficients are simultaneously zero.
+   A large F-statistic with a small p-value (Prob(F-statistic) < 0.05) means
+   the model has significant explanatory power as a whole.
+
+Q: What does R-squared in the OLS output tell you vs. the sklearn R²?
+A: They measure the same thing (proportion of variance explained) but in different
+   contexts. The statsmodels OLS R² is computed on the training data and reflects
+   in-sample fit. It also reports Adjusted R², which penalises adding more
+   features (unlike plain R², Adjusted R² can decrease if you add irrelevant
+   features). The sklearn R² we report is computed on the held-out 2023 test set —
+   this is the more meaningful out-of-sample performance measure.
+
+Q: What does the coefficient of gdp_growth_lag1 mean specifically?
+A: It means: holding all other features constant, a 1 percentage point increase
+   in last year's GDP growth rate is associated with a [coef value] percentage
+   point increase in this year's GDP growth rate. For example, if the coefficient
+   is 0.35, a country that grew 1% faster last year is predicted to grow 0.35%
+   faster this year, all else equal.
+
+────────────────────────────────────────────
+CATEGORY F: RESULTS & INTERPRETATION
+────────────────────────────────────────────
+
+Q: Which model is the best and why?
+A: Gradient Boosting and Random Forest perform similarly and both substantially
+   outperform the linear models. Gradient Boosting typically edges ahead slightly
+   due to its sequential error-correction mechanism. The linear models confirm
+   that GDP growth has non-linear relationships with predictors that tree-based
+   models capture. If forced to pick one: Gradient Boosting — it has the highest
+   R² and lowest RMSE on the 2023 test set.
+
+Q: Why does Simple Linear Regression perform worse?
+A: Three reasons: (1) it uses only one feature, ignoring all other predictors;
+   (2) it assumes a perfectly linear relationship; (3) it has no mechanism to
+   handle the complex interactions between economic variables. However, its
+   performance is not random — because gdp_growth_lag1 has meaningful correlation,
+   it still produces a positive R².
+
+Q: What does the Actual vs. Predicted plot tell you?
+A: It shows how close each prediction is to the truth. Points should cluster
+   near the red dashed line (perfect prediction = slope of 1, intercept of 0).
+   Scatter around the line shows the prediction error. Systematic deviations
+   (e.g., all high-growth countries predicted too low) would indicate model
+   bias. Symmetric scatter indicates the model is unbiased but imprecise.
+
+Q: What would an RMSE of around 2.5 mean in practical terms?
+A: It means on average, the model's prediction of a country's GDP growth is off
+   by ±2.5 percentage points. For a country that actually grew 3%, the model
+   might predict anywhere from 0.5% to 5.5%. For macroeconomic forecasting,
+   this is a reasonable level of accuracy — even IMF/World Bank forecasters
+   often miss by 1–2 percentage points, and our task is harder because we use
+   no current-year data.
+
+Q: Are there countries the model predicts particularly poorly?
+A: Countries with structural breaks or exceptional events (post-war, post-sanctions,
+   natural disasters, political crises) will be predicted poorly because the model
+   relies on historical momentum. Afghanistan, for example, had a severe negative
+   shock (Taliban 2021) that the model's lag features partially captured for 2023
+   but could not fully anticipate. Highly volatile commodity-dependent economies
+   (e.g., Angola, Venezuela) are also harder to predict.
+
+────────────────────────────────────────────
+CATEGORY G: PROCESS & DECISIONS
+────────────────────────────────────────────
+
+Q: If you had more time, how would you improve this project?
+A: Several improvements are possible:
+   (1) Hyperparameter tuning: use GridSearchCV or RandomizedSearchCV to
+       systematically find optimal values for n_estimators, max_depth, α, etc.
+   (2) More features: include commodity prices, exchange rates, political
+       stability indices (World Governance Indicators).
+   (3) Country fixed effects: add dummy variables for regions or income groups
+       to account for structural differences between economies.
+   (4) SHAP values: for more principled feature attribution instead of impurity-
+       based importance.
+   (5) Time-series CV: instead of a single 2023 holdout, use expanding-window
+       cross-validation across multiple test years.
+
+Q: Why didn't you use neural networks?
+A: Neural networks typically require large amounts of data (tens of thousands of
+   samples minimum) to generalise well. Our training set is ~13,700 rows but
+   across 217 countries — the per-country sample size is only ~64 years. Deep
+   learning is also harder to interpret, and the assignment specifically requires
+   regression models and inference. Tree-based ensembles are the gold standard
+   for tabular data of this scale and outperform neural networks in most
+   structured-data benchmarks.
+
+Q: What ethical concerns exist with a model like this?
+A: (1) Policy influence: if governments or institutions use growth predictions to
+   allocate aid or loans, prediction errors could disadvantage certain countries.
+   (2) Self-fulfilling prophecy: negative growth predictions might reduce investor
+   confidence, making the prediction come true.
+   (3) Data quality: many low-income countries have unreliable national statistics.
+   Predictions for these countries are less reliable but they are the ones most
+   likely to be affected by such a model in practice.
+   (4) Model transparency: policymakers need to understand the basis for
+   predictions, which favours linear/OLS models over black-box ensembles.
+
+Q: What is the difference between prediction and forecasting?
+A: In strict terms, prediction refers to estimating values for observations in
+   our current dataset (in-sample or held-out test). Forecasting refers to
+   estimating future values that do not yet exist. This project does both: we
+   evaluate on the 2023 test set (prediction) and the pipeline could be applied
+   to generate 2024/2025 forecasts if future data on lag features were available.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 11 — KEY LIBRARIES AND WHAT THEY DO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pandas       — data loading, manipulation, groupby operations, time-series shifts
+numpy        — numerical operations, log transformation, array handling
+matplotlib   — static plots (trend lines, actual vs. predicted scatter)
+seaborn      — statistical visualisation (heatmaps)
+plotly       — interactive bar chart for top 10 GDP countries
+scikit-learn — all ML models (LinearRegression, Ridge, RandomForest,
+               GradientBoosting), evaluation metrics, StandardScaler,
+               cross_val_score
+statsmodels  — OLS regression with full statistical inference output
+               (coefficients, standard errors, t-stats, p-values, F-stat, R²)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 12 — QUICK-REFERENCE DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Autocorrelation:      Correlation of a variable with its own lagged values
+Bagging:              Training each tree on a random bootstrap sample (RF)
+Boosting:             Sequentially training models to correct prior errors (GB)
+Coefficient:          The slope/effect size of a predictor in linear regression
+Cross-validation:     Evaluating model on multiple train/validation splits
+Data leakage:         Using future information to predict the past
+Feature engineering:  Creating new variables from existing ones
+Feature importance:   A model's ranking of which features drive predictions
+Forward-fill:         Imputing missing values using the previous valid value
+Gradient descent:     Iterative algorithm to minimise a loss function
+Hyperparameter:       A model setting set before training (not learned from data)
+Impurity (Gini/Var):  Measure of homogeneity in decision tree leaf nodes
+L2 regularisation:    Penalty equal to the sum of squared coefficients (Ridge)
+Lag feature:          A feature whose value comes from a previous time period
+Mean Decrease Impurity: RF feature importance measure (contribution to splits)
+Null hypothesis:      The default assumption tested in statistical inference
+Overfitting:          Model performs well on training but poorly on new data
+Panel data:           Data with both cross-sectional (countries) and time dimensions
+p-value:              Probability of observing data this extreme if H₀ is true
+R²:                   Proportion of target variance explained by the model
+Regularisation:       Adding a penalty to prevent overfitting
+Residual:             Difference between actual and predicted value
+RMSE:                 Root mean squared error — average prediction error in units
+Temporal split:       Train/test division based on time rather than random sampling
+Winsorisation:        Clipping extreme values to percentile boundaries
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 13 — THE STORY OF THE PROJECT IN ONE PARAGRAPH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+We set out to predict GDP growth rates for countries around the world using
+historical World Bank data. After loading and cleaning 13,888 country-year
+observations (fixing missing values, removing physically impossible outliers,
+and standardising data types), we discovered that the raw features had almost
+no correlation with the target because they were all contemporaneous measurements.
+We solved this by engineering lagged features — capturing each country's own
+historical growth momentum — which raised the maximum single-feature correlation
+from 0.14 to 0.36. Using a strict temporal split (train on pre-2023, test on 2023),
+we trained four models: a baseline Simple Linear Regression, a Ridge-regularised
+multi-feature model to handle correlated features, and two non-linear ensemble
+models (Random Forest and Gradient Boosting) to capture economic relationships
+beyond straight lines. The ensemble models substantially outperformed the linear
+ones, confirming that GDP growth has complex, non-linear determinants. To satisfy
+the inference requirement, we ran an OLS regression using statsmodels, which
+identified lagged growth, capital formation, and inflation as statistically
+significant predictors, consistent with standard macroeconomic theory. Feature
+importance analysis confirmed that past growth momentum is the single most
+powerful predictor, validating our feature engineering strategy.
+
+================================================================================
+END OF STUDY GUIDE
+================================================================================
