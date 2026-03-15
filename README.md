@@ -140,12 +140,10 @@ Models are evaluated on the held-out **2023 test set** using RMSE, MSE, and R².
 
 | Model | RMSE | MSE | R² (Test) | CV R² (Train) |
 |---|---|---|---|---|
-| Simple LR | — | — | — | — |
-| Ridge Regression | — | — | — | — |
-| Random Forest | — | — | — | — |
-| Gradient Boosting | — | — | — | — |
-
-> *Run the notebook to populate the results table with actual values.*
+| Simple LR |  | 6.3137 | 39.8630 | 0.0547 |
+| Ridge Regression | 5.9878 | 39.8630 | 0.01498 |
+| Random Forest | 5.5417 | 30.7104 | 0.2718 |
+| Gradient Boosting | 4.4745 | 20.0214 | 0.5252 |
 
 **Gradient Boosting** achieves the best overall performance. Both ensemble models substantially outperform linear models, confirming non-linear relationships between economic indicators and GDP growth.
 
