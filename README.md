@@ -138,9 +138,9 @@ GradientBoostingRegressor(n_estimators=300, max_depth=4,
 
 Models are evaluated on the held-out **2023 test set** using RMSE, MSE, and R². 5-fold cross-validation R² is also reported for ensemble models.
 
-| Model | RMSE | MSE | R² (Test) | CV R² (Train) |
-|---|---|---|---|---|
-| Simple LR |  | 6.3137 | 39.8630 | 0.0547 |
+| Model | RMSE | MSE | R² (Test) |
+|---|---|---|---|
+| Simple LR |  6.3137 | 39.8630 | 0.0547 |
 | Ridge Regression | 5.9878 | 39.8630 | 0.01498 |
 | Random Forest | 5.5417 | 30.7104 | 0.2718 |
 | Gradient Boosting | 4.4745 | 20.0214 | 0.5252 |
