@@ -1,7 +1,6 @@
 ================================================================================
   GDP GROWTH PREDICTION — COMPLETE STUDY GUIDE
   Fundamentals of Data Science | Regression & Inference Assignment
-  Group: Anuj Singh · Prasiddha Adhikari · Sri Krishna Lamichane
 ================================================================================
 
 
