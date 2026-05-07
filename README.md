@@ -2,11 +2,6 @@
 
 > Regression modelling and statistical inference on World Bank panel data across 217 countries (1960–2023).
 
-**Fundamentals of Data Science** · Tribhuvan University  
-**Group:** Anuj Singh · Prasiddha Adhikari · Sri Krishna Lamichane  
-**Date:** March 2025
-
----
 
 ## Overview
 
